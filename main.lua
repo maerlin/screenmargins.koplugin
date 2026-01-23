@@ -29,15 +29,21 @@ function ScreenMargins:loadSettings()
     -- Get the original screen size (before any viewport is applied)
     -- Store it if not already stored - this is our "source of truth" for the real screen size
     local original_screen_size = G_reader_settings:readSetting("screen_original_size")
+    local current_screen_size = {
+        w = Screen:getScreenWidth(),
+        h = Screen:getScreenHeight(),
+    }
     if not original_screen_size then
         -- First time loading - get the actual screen size from the framebuffer
         -- Use getScreenWidth/getScreenHeight which return the real screen size, not viewport size
-        original_screen_size = {
-            w = Screen:getScreenWidth(),
-            h = Screen:getScreenHeight(),
-        }
+        original_screen_size = current_screen_size
         G_reader_settings:saveSetting("screen_original_size", original_screen_size)
         logger.dbg("ScreenMargins: Stored original screen size:", original_screen_size)
+    elseif original_screen_size.w ~= current_screen_size.w or original_screen_size.h ~= current_screen_size.h then
+        -- Device changed or stored size is stale; refresh to avoid invalid viewport math.
+        original_screen_size = current_screen_size
+        G_reader_settings:saveSetting("screen_original_size", original_screen_size)
+        logger.warn("ScreenMargins: Screen size changed, refreshed original size:", original_screen_size)
     end
     self.original_screen_size = original_screen_size
     
@@ -63,6 +69,25 @@ function ScreenMargins:saveSettings()
         w = self.viewport.w,
         h = self.viewport.h,
     })
+end
+
+function ScreenMargins:markRestartNeeded(reason)
+    self._restart_prompt_needed = true
+    self._restart_prompt_reason = reason
+end
+
+function ScreenMargins:maybePromptRestart()
+    if self._restart_prompt_needed then
+        self._restart_prompt_needed = false
+        local message
+        if self._restart_prompt_reason == "reset" then
+            message = _("Screen margins have been reset to full screen. Please restart KOReader for the changes to take full effect.")
+        else
+            message = _("Screen margins have been updated. Please restart KOReader for the changes to take full effect.")
+        end
+        self._restart_prompt_reason = nil
+        UIManager:askForRestart(message)
+    end
 end
 
 function ScreenMargins:applyViewport()
@@ -97,21 +122,28 @@ function ScreenMargins:applyViewport()
         if Screen.setViewport then
             Screen:setViewport(self.viewport)
             -- Adjust touch input if needed
-            if Device.input and (self.viewport.x ~= 0 or self.viewport.y ~= 0) then
-                -- Remove old hook if exists
+            if Device.input then
+                -- Remove old hook if exists (only our own hook, if marked)
                 if Device.input.event_adjust_hooks then
-                    for i, hook in ipairs(Device.input.event_adjust_hooks) do
-                        if hook.func == Device.input.adjustTouchTranslate then
+                    for i = #Device.input.event_adjust_hooks, 1, -1 do
+                        local hook = Device.input.event_adjust_hooks[i]
+                        if hook.func == Device.input.adjustTouchTranslate and
+                           hook.params and hook.params._screenmargins then
                             table.remove(Device.input.event_adjust_hooks, i)
-                            break
                         end
                     end
                 end
-                -- Add new hook
-                Device.input:registerEventAdjustHook(
-                    Device.input.adjustTouchTranslate,
-                    {x = 0 - self.viewport.x, y = 0 - self.viewport.y}
-                )
+                if self.viewport.x ~= 0 or self.viewport.y ~= 0 then
+                    -- Add new hook
+                    Device.input:registerEventAdjustHook(
+                        Device.input.adjustTouchTranslate,
+                        {
+                            x = 0 - self.viewport.x,
+                            y = 0 - self.viewport.y,
+                            _screenmargins = true,
+                        }
+                    )
+                end
             end
             logger.dbg("ScreenMargins: Applied viewport", self.viewport)
         end
@@ -142,7 +174,8 @@ function ScreenMargins:addToMainMenu(menu_items)
                     }
                     self:saveSettings()
                     self:applyViewport()
-                    UIManager:askForRestart(_("Screen margins have been reset to full screen. Please restart KOReader for the changes to take full effect."))
+                    self:markRestartNeeded("reset")
+                    self:maybePromptRestart()
                 end,
             },
             {
@@ -177,6 +210,8 @@ function ScreenMargins:showConfigDialog()
     end
     local screen_w = self.original_screen_size.w
     local screen_h = self.original_screen_size.h
+    self._restart_prompt_needed = false
+    self._restart_prompt_reason = nil
     
     local function showXDialog()
         local x_dialog = SpinWidget:new{
@@ -197,7 +232,7 @@ function ScreenMargins:showConfigDialog()
                 end
                 self:saveSettings()
                 self:applyViewport()
-                UIManager:askForRestart(_("Screen margins have been updated. Please restart KOReader for the changes to take full effect."))
+                self:markRestartNeeded("update")
             end,
         }
         UIManager:show(x_dialog)
@@ -222,7 +257,7 @@ function ScreenMargins:showConfigDialog()
                 end
                 self:saveSettings()
                 self:applyViewport()
-                UIManager:askForRestart(_("Screen margins have been updated. Please restart KOReader for the changes to take full effect."))
+                self:markRestartNeeded("update")
             end,
         }
         UIManager:show(y_dialog)
@@ -248,7 +283,7 @@ function ScreenMargins:showConfigDialog()
                 end
                 self:saveSettings()
                 self:applyViewport()
-                UIManager:askForRestart(_("Screen margins have been updated. Please restart KOReader for the changes to take full effect."))
+                self:markRestartNeeded("update")
             end,
         }
         UIManager:show(w_dialog)
@@ -274,7 +309,7 @@ function ScreenMargins:showConfigDialog()
                 end
                 self:saveSettings()
                 self:applyViewport()
-                UIManager:askForRestart(_("Screen margins have been updated. Please restart KOReader for the changes to take full effect."))
+                self:markRestartNeeded("update")
             end,
         }
         UIManager:show(h_dialog)
@@ -307,6 +342,12 @@ function ScreenMargins:showConfigDialog()
             },
         },
     }
+    config_menu.dismiss_callback = function()
+        self:maybePromptRestart()
+    end
+    config_menu.onClose = function()
+        self:maybePromptRestart()
+    end
     UIManager:show(config_menu)
 end
 
