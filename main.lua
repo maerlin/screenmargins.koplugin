@@ -153,6 +153,7 @@ end
 function ScreenMargins:addToMainMenu(menu_items)
     menu_items.screenmargins = {
         text = _("Screen margins"),
+        sorting_hint = "more_tools",
         sub_item_table = {
             {
                 text = _("Configure margins"),
