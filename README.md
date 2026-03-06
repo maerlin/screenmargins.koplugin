@@ -1,13 +1,14 @@
 # Screen Margins Plugin
 
-A simple plugin to configure screen margins/viewport for devices where part of the screen is covered by bezels (e.g., bottom part cut off behind screen bezel).
+A KOReader plugin to configure screen margins for devices where part of the screen is physically covered by a bezel (e.g., the bottom edge sits behind a plastic frame).
 
 ## Features
 
-- Configure screen viewport (x, y, width, height) through a simple UI
-- Adjust margins to account for bezels that cover part of the screen
+- Configure margins per edge: top, bottom, left, right
+- Live **preview** — a black frame overlay shows exactly where margins will be cut before you commit
 - Settings persist across restarts
-- Works with all device types
+- Touch input coordinates are automatically adjusted to match the viewport offset
+- Rotation-aware: margin settings survive orientation changes without being invalidated
 
 ## Installation
 
@@ -18,57 +19,55 @@ A simple plugin to configure screen margins/viewport for devices where part of t
 
    The location depends on your device:
 
-   - **Kindle/Kobo/Android**: Extract to `/koreader/plugins/`
-   - **Linux**: Extract to `~/.config/koreader/plugins/`
-   - **Windows**: Extract to `%APPDATA%/koreader/plugins/`
-   - **macOS**: Extract to `~/Library/Application Support/koreader/plugins/`
+   - **Kindle/Kobo/Android**: `/koreader/plugins/`
+   - **Linux**: `~/.config/koreader/plugins/`
+   - **Windows**: `%APPDATA%/koreader/plugins/`
+   - **macOS**: `~/Library/Application Support/koreader/plugins/`
 
-   The plugin should be placed as `plugins/screenmargins.koplugin/` containing all plugin files.
+   The plugin must be placed as `plugins/screenmargins.koplugin/` containing all plugin files.
 
-3. **Restart KOReader**: Close and reopen KOReader to load the plugin
+3. **Restart KOReader** to load the plugin.
 
-4. **Verify installation**:
-   - Open KOReader's menu
-   - You should see **Screen margins** in the menu
+4. **Verify installation**: open the KOReader menu — you should see **Screen margins** listed.
 
 ## Usage
 
-1. Open KOReader
-2. Go to **Menu** → **Screen margins** → **Configure margins**
-3. Adjust the four parameters:
-   - **X offset (left margin)**: Horizontal offset from left edge
-   - **Y offset (top margin)**: Vertical offset from top edge  
-   - **Width**: Width of usable screen area
-   - **Height**: Height of usable screen area
+1. Go to **Menu → Screen margins → Configure margins**
+2. Tap the edge you want to adjust (**Top**, **Bottom**, **Left**, or **Right**)
+3. Use the spinner to set the number of pixels to trim from that edge, then tap **Set**
+4. Repeat for any other edges
+5. Tap **Preview** to see a black frame overlay showing exactly where the margins will fall — tap **Apply** to save, or **Cancel** to go back and adjust
+6. Tap **Apply** directly (without previewing) to save and be prompted to restart
 
-4. The viewport is applied immediately
-5. Settings are saved automatically
+Changes take effect after restarting KOReader.
 
 ### Example
 
-If your device has 10 pixels cut off at the bottom:
-- Set **Height** to `screen_height - 10`
-- Keep **X offset** and **Y offset** at `0`
-- Set **Width** to full screen width
+If your device has 12 pixels hidden behind the bottom bezel:
+
+- Open **Configure margins**
+- Tap **Bottom**, set the value to `12`, tap **Set**
+- Tap **Preview** to confirm the margin looks right
+- Tap **Apply** and restart KOReader
+
+## Menu items
+
+| Item | Description |
+|---|---|
+| **Configure margins** | Open the margin editor (Top / Bottom / Left / Right) |
+| **Reset to full screen** | Clear all margins and restore the full screen viewport |
+| **Show current settings** | Display current screen size, viewport coordinates, and margin values |
 
 ## How It Works
 
-- The plugin stores viewport settings in `G_reader_settings` as `screen_viewport`
-- The original screen size is stored once as `screen_original_size` to serve as a reference
-- The plugin applies the viewport when it loads
-- Touch input coordinates are automatically adjusted for the viewport offset
-- A restart is recommended after changing margins to ensure proper initialization
+- The physical screen size is stored once in `G_reader_settings` as `screen_original_size` on first load and used as the reference for all margin calculations
+- Margin values are converted to a viewport rectangle (`x`, `y`, `w`, `h`) stored as `screen_viewport`
+- On startup, the plugin applies the saved viewport via `Screen:setViewport()` and registers a touch translation hook to keep input coordinates aligned with the offset viewport
+- The preview overlay draws black bars directly onto the framebuffer at the margin positions without modifying the viewport, so no restart is needed to dismiss it
 
 ## Troubleshooting
 
-### Installation Issues
-- Ensure the directory is named exactly `screenmargins.koplugin`
-- Verify all `.lua` files are present in the plugin directory (`main.lua` and `_meta.lua`)
-- Check that you have write permissions to the plugins directory
-- If the plugin doesn't appear, check KOReader's crash.log for errors
-
-### Usage Issues
-- Check the logs for "ScreenMargins" messages (enable debug logging if needed)
-- You can reset to full screen via **Menu** → **Screen margins** → **Reset to full screen**
-- If margins don't seem to apply, try restarting KOReader
-- The original screen size is stored on first load - if you change devices, you may need to clear the `screen_original_size` setting
+- **Plugin not appearing**: ensure the directory is named exactly `screenmargins.koplugin` and both `main.lua` and `_meta.lua` are present
+- **Margins not applying**: check KOReader's crash.log for errors; try **Reset to full screen** and reconfigure
+- **Changed devices**: if the screen size is different, the stored `screen_original_size` will be automatically updated on first load
+- **Debug logs**: search for `ScreenMargins` in KOReader's log output (enable debug logging if needed)
