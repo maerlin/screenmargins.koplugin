@@ -238,12 +238,14 @@ function ScreenMargins:addToMainMenu(menu_items)
     }
 end
 
-function ScreenMargins:showConfigDialog()
+function ScreenMargins:showConfigDialog(restore_point)
     local screen_w = self.original_screen_size.w
     local screen_h = self.original_screen_size.h
 
-    -- Snapshot the viewport at dialog open so Cancel can restore it.
-    local viewport_before = Geom:new{
+    -- Snapshot the viewport so Cancel reverts to the state before the dialog
+    -- was first opened. When re-entering from a preview Cancel, the original
+    -- restore point is passed through so it isn't lost.
+    local viewport_before = restore_point or Geom:new{
         x = self.viewport.x,
         y = self.viewport.y,
         w = self.viewport.w,
@@ -366,10 +368,9 @@ function ScreenMargins:showConfigDialog()
                                     {
                                         text = _("Cancel"),
                                         callback = function()
-                                            self.viewport = viewport_before
                                             UIManager:close(confirm_dialog)
                                             UIManager:close(overlay)
-                                            self:showConfigDialog()
+                                            self:showConfigDialog(viewport_before)
                                             UIManager:setDirty("all", "full")
                                         end,
                                     },
