@@ -11,6 +11,7 @@ local Geom = require("ui/geometry")
 local InfoMessage = require("ui/widget/infomessage")
 local SpinWidget = require("ui/widget/spinwidget")
 local UIManager = require("ui/uimanager")
+local Widget = require("ui/widget/widget")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local logger = require("logger")
 local _ = require("gettext")
@@ -19,7 +20,7 @@ local Screen = Device.screen
 -- Full-screen overlay that draws black bars at the margin positions,
 -- giving a "papercut frame" preview of how the margins will look without
 -- requiring an actual viewport change.
-local MarginOverlay = WidgetContainer:extend{}
+local MarginOverlay = Widget:extend{}
 
 function MarginOverlay:paintTo(bb, x, y)
     local black = Blitbuffer.COLOR_BLACK
@@ -135,7 +136,12 @@ function ScreenMargins:applyViewport()
         Device.viewport.h ~= self.viewport.h
 
     if viewport_changed then
-        Device.viewport = self.viewport
+        Device.viewport = Geom:new{
+            x = self.viewport.x,
+            y = self.viewport.y,
+            w = self.viewport.w,
+            h = self.viewport.h,
+        }
         if Screen.setViewport then
             Screen:setViewport(self.viewport)
             if Device.input then
@@ -149,11 +155,31 @@ function ScreenMargins:applyViewport()
     end
 end
 
+-- KOReader may reset the framebuffer viewport on rotation, so re-apply ours.
+-- setViewport operates on physical screen coordinates, which don't change
+-- with rotation, so the stored viewport is used as-is.
+function ScreenMargins:onScreenRotate()
+    if not self.viewport or not Screen.setViewport then return end
+    Screen:setViewport(self.viewport)
+    Device.viewport = Geom:new{
+        x = self.viewport.x,
+        y = self.viewport.y,
+        w = self.viewport.w,
+        h = self.viewport.h,
+    }
+    if Device.input then
+        self:_unregisterTouchHook()
+        if self.viewport.x ~= 0 or self.viewport.y ~= 0 then
+            self:_registerTouchHook()
+        end
+    end
+    logger.dbg("ScreenMargins: Re-applied viewport after rotation", self.viewport)
+end
+
 function ScreenMargins:_registerTouchHook()
     self._touch_hook_params = {
         x = -self.viewport.x,
         y = -self.viewport.y,
-        _screenmargins = true,
     }
     Device.input:registerEventAdjustHook(
         Device.input.adjustTouchTranslate,
@@ -164,7 +190,7 @@ end
 function ScreenMargins:_unregisterTouchHook()
     if not self._touch_hook_params or not Device.input.event_adjust_hooks then return end
     for i = #Device.input.event_adjust_hooks, 1, -1 do
-        if Device.input.event_adjust_hooks[i].params == self._touch_hook_params then
+        if Device.input.event_adjust_hooks[i][2] == self._touch_hook_params then
             table.remove(Device.input.event_adjust_hooks, i)
             break
         end
