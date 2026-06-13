@@ -73,3 +73,11 @@ If your device has 12 pixels hidden behind the bottom bezel:
 - **Margins not applying**: check KOReader's crash.log for errors; try **Reset to full screen** and reconfigure
 - **Changed devices**: if the screen size is different, the stored `screenmargins_original_size` will be automatically updated on first load
 - **Debug logs**: search for `ScreenMargins` in KOReader's log output (enable debug logging if needed)
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
