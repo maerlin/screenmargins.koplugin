@@ -7,7 +7,8 @@ A KOReader plugin to configure screen margins for devices where part of the scre
 - Configure margins per edge: top, bottom, left, right
 - Live **preview** — a black frame overlay shows exactly where margins will be cut before you commit
 - Settings persist across restarts
-- Touch input coordinates are automatically adjusted to match the viewport offset
+- Malformed saved settings are validated and reset instead of crashing KOReader
+- Touch input coordinates are adjusted with a single mutable hook, avoiding duplicate translations
 - Rotation-aware: margin settings survive orientation changes without being invalidated
 
 ## Installation
@@ -60,14 +61,15 @@ If your device has 12 pixels hidden behind the bottom bezel:
 
 ## How It Works
 
-- The physical screen size is stored once in `G_reader_settings` as `screen_original_size` on first load and used as the reference for all margin calculations
-- Margin values are converted to a viewport rectangle (`x`, `y`, `w`, `h`) stored as `screen_viewport`
-- On startup, the plugin applies the saved viewport via `Screen:setViewport()` and registers a touch translation hook to keep input coordinates aligned with the offset viewport
+- The physical screen size is stored once in `G_reader_settings` as `screenmargins_original_size` and used as the reference for all margin calculations
+- Margin values are converted to a viewport rectangle (`x`, `y`, `w`, `h`) stored as `screenmargins_viewport` (legacy `screen_original_size` / `screen_viewport` values are migrated automatically)
+- On first install, any KOReader/device viewport already in effect is kept as a baseline so merely enabling the plugin does not alter the display
+- On startup, the plugin applies the saved viewport via `Screen:setViewport()` and uses one mutable touch translation hook to keep input coordinates aligned without piling up duplicate hooks
 - The preview overlay draws black bars directly onto the framebuffer at the margin positions without modifying the viewport, so no restart is needed to dismiss it
 
 ## Troubleshooting
 
 - **Plugin not appearing**: ensure the directory is named exactly `screenmargins.koplugin` and both `main.lua` and `_meta.lua` are present
 - **Margins not applying**: check KOReader's crash.log for errors; try **Reset to full screen** and reconfigure
-- **Changed devices**: if the screen size is different, the stored `screen_original_size` will be automatically updated on first load
+- **Changed devices**: if the screen size is different, the stored `screenmargins_original_size` will be automatically updated on first load
 - **Debug logs**: search for `ScreenMargins` in KOReader's log output (enable debug logging if needed)
